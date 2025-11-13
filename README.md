@@ -65,7 +65,7 @@ docker run --rm qmcgaw/gluetun genkey
  - Then to grant the mod read access to the forwarded port, add the following lines to Gluetun's `config.toml` file (replace the API Key) :
 ```toml
 [[roles]]
-name = "t-anc/GSP-Qbittorent-Gluetun-sync-port-mod"
+name = "ondro/GSP-Qbittorent-Gluetun-sync-port-mod"
 routes = ["GET /v1/openvpn/portforwarded"]
 auth = "apikey"
 # This is an example apikey, generate your own.
@@ -80,7 +80,7 @@ With this setup every time the mod calls Gluetun, it authenticates with the cont
 ## Install as a mod (lsio qBittorrent image)
 
 Follow the instructions [here](https://docs.linuxserver.io/general/container-customization/#docker-mods).
-With the following link for the mod `ghcr.io/t-anc/gsp-qbittorent-gluetun-sync-port-mod:main`.
+With the following link for the mod `ghcr.io/ondro/gsp-qbittorent-gluetun-sync-port-mod:main`.
 
 You can configure it using [env variables](#Variables).
 
@@ -102,7 +102,7 @@ GSP_qbt_gtn_sync_port:
   image: ghcr.io/linuxserver/baseimage-alpine:edge
   container_name: GSP_qbt_gtn_sync_port
   environment:
-      - DOCKER_MODS=ghcr.io/t-anc/gsp-qbittorent-gluetun-sync-port-mod:main
+      - DOCKER_MODS=ghcr.io/ondro/gsp-qbittorent-gluetun-sync-port-mod:main
       # Of course this is an API Key example, don't use this
       - GSP_GTN_API_KEY=yOdKVNFEA3/BSIWhPZohxppHd9I6bHiSJ
   network_mode: container:gluetun
@@ -176,7 +176,7 @@ services:
         environment:
           - TZ=Europe/Paris
           - WEBUI_PORT=8080
-          - DOCKER_MODS=ghcr.io/t-anc/gsp-qbittorent-gluetun-sync-port-mod:main
+          - DOCKER_MODS=ghcr.io/ondro/gsp-qbittorent-gluetun-sync-port-mod:main
           # Of course this is an API Key example, don't use this
           - GSP_GTN_API_KEY=yOdKVNFEA3/BSIWhPZohxppHd9I6bHiSJ+FasGlncleveW4LvuO7ONy5w1IsEA2Pu6s=
           - GSP_MINIMAL_LOGS=false
@@ -356,6 +356,6 @@ There are 2 main issues with HTTPS :
     To remediate this, you can use the `GSP_CERT_CHECK` variable and set it to `false`. This will use the `insecure` flag for every `curl` request.
  - Your certificate is trusted, but does not contain `localhost` (obviously) and so the connection is refused.
   
-    For this one, you can check [Unspec7's guide](https://github.com/t-anc/GSP-Qbittorent-Gluetun-sync-port-mod/issues/14) (Thanks to him).
+    For this one, you can check [Unspec7's guide](https://github.com/ondro/GSP-Qbittorent-Gluetun-sync-port-mod/issues/14) (Thanks to him).
 
 </details>

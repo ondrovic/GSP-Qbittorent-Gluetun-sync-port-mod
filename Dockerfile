@@ -2,7 +2,7 @@
 
 FROM scratch
 
-LABEL maintainer="Tanc"
+LABEL maintainer="ondro"
 
 # copy local files
 COPY root/ /
