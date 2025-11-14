@@ -86,6 +86,35 @@ qbt_login(){
       --data "password=${QBT_PASSWORD}"
 }
 
+# Check if forwarded port is actually open using external service
+check_port_open(){
+  local port="$1"
+  local check_url="https://portcheck.transmissionbt.com/${port}"
+  local output
+  local tool_used
+
+  # Detect available tool (curl first, wget as fallback)
+  if command -v curl >/dev/null 2>&1; then
+    output=$(curl -s ${CURL_OPT} "${check_url}" 2>/dev/null)
+    tool_used="curl"
+  elif command -v wget >/dev/null 2>&1; then
+    output=$(wget -qO- "${check_url}" 2>/dev/null)
+    tool_used="wget"
+  else
+    [ "${GSP_MINIMAL_LOGS,,}" = 'false' ] && log "[GSP-PORT-CHECK] Neither curl nor wget available, skipping port check."
+    return 0
+  fi
+
+  # Check if port is open (service returns "1" for open)
+  if echo "${output}" | grep -q "1"; then
+    [ "${GSP_MINIMAL_LOGS,,}" = 'false' ] && log "[GSP-PORT-CHECK] Port ${port} is open (verified with ${tool_used})."
+    return 0
+  else
+    log "[GSP-PORT-CHECK] WARNING: Port ${port} appears to be closed or unreachable."
+    return 1
+  fi
+}
+
 
 # Check the config for common mistakes. Run only once at startup. Can be deactivated.
 init_checks(){
@@ -197,6 +226,9 @@ log "Couldn't connect to webUI. Check the address, or maybe your instance is tak
 
 init_checks
 
+# Track first run for initial port check
+FIRST_RUN=true
+
 # Infinite loop
 while :; do
     SLEEP_TIME="${MAX_SLEEP_TIME}"
@@ -215,6 +247,12 @@ while :; do
         SLEEP_TIME=${RETRY_DELAY}
     fi
     if [ "${SLEEP_TIME}" -ne "${RETRY_DELAY}" ]; then # If everything OK
+      # Check if this is the first run with a valid port
+      if [ "${FIRST_RUN}" = true ]; then
+          FIRST_RUN=false
+          check_port_open "${GTN_PORT}"
+      fi
+
       if [ "${QBT_PORT}" = "${GTN_PORT}" ]; then
           [ "${GSP_MINIMAL_LOGS,,}" = 'false' ] && log "Ports did not change."
       else
@@ -229,11 +267,13 @@ while :; do
               ${QBT_COOKIES} \
               --url "${QBITTORRENT}/api/v2/app/setPreferences" \
               --data "json={\"listen_port\": $GTN_PORT}"
-          
+
           # get the updated value from qbittorrent
           get_ports "qbt"
           if [ "${QBT_PORT}" = "${GTN_PORT}" ]; then
               log "Qbittorrent port successfully updated."
+              # Check if the new port is open
+              check_port_open "${GTN_PORT}"
           else
               log "ERROR updating qbittorrent port !"
               SLEEP_TIME=${RETRY_DELAY}

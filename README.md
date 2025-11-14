@@ -16,6 +16,12 @@ This mod is to be used with [linuxserver/qbittorrent container](https://github.c
 
 This mod will call Gluetun API to get the current forwarded port, qBittorrent's API to get the currently configured port, and in case those two ports don't match, update qBittorrent's port.
 
+Additionally, the mod automatically verifies that the forwarded port is actually open and reachable from the internet using an external port checking service. This check runs:
+- On first startup (once a valid port is obtained)
+- Every time the port changes
+
+The port check respects the `GSP_MINIMAL_LOGS` setting - enable verbose logging to see successful port checks.
+
 Here is a very simplified representation of the mod's behaviour :
 
 ```mermaid
