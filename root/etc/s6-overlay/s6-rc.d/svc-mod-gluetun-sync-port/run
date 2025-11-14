@@ -18,6 +18,13 @@ GLUETUN="${GSP_GTN_ADDR:-http://localhost:8000}"
 GTN_API_KEY="${GSP_GTN_API_KEY}"
 GTN_AUTH=("-H" "X-API-Key:${GTN_API_KEY}")
 
+# Gluetun API endpoints to try (in order of preference)
+# Add new endpoints to this array as they become available
+GTN_ENDPOINTS=(
+  "/v1/portforward"           # New endpoint (Gluetun v4+)
+  "/v1/openvpn/portforwarded" # Legacy endpoint (Gluetun v3)
+)
+
 QBITTORRENT="${GSP_QBT_ADDR:-http://localhost:${WEBUI_PORT:-8080}}"
 [ -n "${GSP_QBT_PASSWORD_FILE}" ] && GSP_QBT_PASSWORD="$(cat "${GSP_QBT_PASSWORD_FILE}")"
 QBT_USERNAME="${GSP_QBT_USERNAME}"
@@ -77,11 +84,17 @@ $(env | grep 'GSP')
 fi
 
 
+# Reusable curl wrapper with common options
+# Usage: do_curl <url> [additional curl options...]
+do_curl(){
+  local url="$1"
+  shift
+  curl --silent --fail --show-error ${CURL_OPT} "$@" "${url}"
+}
+
 qbt_login(){
-  curl --fail --silent \
-      ${CURL_OPT} \
+  do_curl "${QBITTORRENT}/api/v2/auth/login" \
       ${QBT_COOKIES} \
-      --url "${QBITTORRENT}/api/v2/auth/login" \
       --data "username=${QBT_USERNAME}" \
       --data "password=${QBT_PASSWORD}"
 }
@@ -166,9 +179,17 @@ init_checks(){
   if [ -z "${GTN_API_KEY}" ];then
     log "[WARNING] It seems you don't have any 'GSP_GTN_API_KEY' set. You should set one, follow the doc here : https://github.com/ondrovic/GSP-Qbittorent-Gluetun-sync-port-mod#gluetun"
   else
-    if [ "$(curl ${CURL_OPT} --write-out '%{http_code}' --silent --output /dev/null "${GTN_AUTH[@]}" "${GLUETUN}/v1/openvpn/portforwarded")" -eq '401' ]; then
+    # Try each endpoint to verify authentication
+    local gtn_check_passed=false
+    for endpoint in "${GTN_ENDPOINTS[@]}"; do
+      if [ "$(curl ${CURL_OPT} --write-out '%{http_code}' --silent --output /dev/null "${GTN_AUTH[@]}" "${GLUETUN}${endpoint}")" -ne '401' ]; then
+        gtn_check_passed=true
+        break
+      fi
+    done
+    if [ "${gtn_check_passed}" = false ]; then
       err='true'
-      log "${MSG_prefix} Gluetun returned 401. Is Gluetun's authentication correctly configured ? See https://github.com/ondrovic/GSP-Qbittorent-Gluetun-sync-port-mod#gluetun"
+      log "${MSG_prefix} Gluetun returned 401 for all endpoints. Is Gluetun's authentication correctly configured ? See https://github.com/ondrovic/GSP-Qbittorent-Gluetun-sync-port-mod#gluetun"
     fi
   fi
 
@@ -184,6 +205,39 @@ init_checks(){
     else
       log "Init checks passed. Listening for a change."
     fi
+  fi
+}
+
+# Get Gluetun forwarded port from API (tries multiple endpoints)
+get_gluetun_port(){
+  local gtn_response
+  local endpoint_used=""
+
+  # Try each endpoint until one succeeds
+  for endpoint in "${GTN_ENDPOINTS[@]}"; do
+    gtn_response=$(do_curl "${GLUETUN}${endpoint}" "${GTN_AUTH[@]}" 2>/dev/null)
+    if [ $? -eq 0 ] && [ -n "${gtn_response}" ]; then
+      endpoint_used="${endpoint}"
+      break
+    fi
+  done
+
+  # If no endpoint worked, return error
+  if [ -z "${endpoint_used}" ]; then
+    GTN_PORT=0
+    return 1
+  fi
+
+  # Parse the response (handles both "port" and "ports" fields)
+  if echo "${gtn_response}" | jq --exit-status 'has("ports")' > /dev/null; then
+    # Multiple ports - ex: {"ports":[10550,20550,30550]}
+    GTN_PORT=$(echo "${gtn_response}" | jq ".ports[${GTN_PORT_INDEX}]" 2>/dev/null)
+    [ "${GTN_PORT}" = "null" ] && log "[ERROR] GSP_GTN_PORT_INDEX (${GSP_GTN_PORT_INDEX:-1}) > Nb of ports ($(echo "${gtn_response}" | jq '.ports | length'))." && GTN_PORT=0
+  elif echo "${gtn_response}" | jq --exit-status 'has("port")' > /dev/null; then
+    # Single port - ex: {"port":34981}
+    GTN_PORT=$(echo "${gtn_response}" | jq '.port' 2>/dev/null)
+  else
+    GTN_PORT=0
   fi
 }
 
@@ -203,19 +257,9 @@ get_ports(){
       GTN='true'
     ;;
   esac
-  [ "${QBT}" ] && QBT_PORT=$(curl --silent --fail --show-error ${CURL_OPT} ${QBT_COOKIES} "${QBITTORRENT}/api/v2/app/preferences" | jq ".listen_port" 2>/dev/null)
-  [ "${GTN}" ] && { 
-    GTN_PORTS=$(curl  --silent --fail --show-error ${CURL_OPT} "${GTN_AUTH[@]}" "${GLUETUN}/v1/openvpn/portforwarded")
-    if echo "${GTN_PORTS}" | jq --exit-status 'has("ports")' > /dev/null; then # Handle the case of multiple ports - ex : [10550,20550,30550]
-      GTN_PORT=$(echo "${GTN_PORTS}" | jq ".ports[${GTN_PORT_INDEX}]" 2>/dev/null) 
-      [ "${GTN_PORT}" = "null" ] && log "[ERROR] GSP_GTN_PORT_INDEX (${GSP_GTN_PORT_INDEX:-1}) > Nb of ports ($(echo "${GTN_PORTS}" | jq '.ports | length'))."\
-        && GTN_PORT=0
-    elif echo "${GTN_PORTS}" | jq --exit-status 'has("port")' > /dev/null; then
-      GTN_PORT=$(echo "${GTN_PORTS}" | jq '.port' 2>/dev/null)
-    else
-      GTN_PORT=0
-    fi
-  }
+
+  [ "${QBT}" ] && QBT_PORT=$(do_curl "${QBITTORRENT}/api/v2/app/preferences" ${QBT_COOKIES} | jq ".listen_port" 2>/dev/null)
+  [ "${GTN}" ] && get_gluetun_port
 }
 
 
