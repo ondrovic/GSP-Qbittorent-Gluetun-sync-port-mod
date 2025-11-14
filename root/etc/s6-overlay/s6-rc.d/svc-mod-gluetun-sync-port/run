@@ -114,16 +114,16 @@ check_port_open(){
     output=$(wget -qO- "${check_url}" 2>/dev/null)
     tool_used="wget"
   else
-    [ "${GSP_MINIMAL_LOGS,,}" = 'false' ] && log "[GSP-PORT-CHECK] Neither curl nor wget available, skipping port check."
+    [ "${GSP_MINIMAL_LOGS,,}" = 'false' ] && log "Neither curl nor wget available, skipping port check."
     return 0
   fi
 
   # Check if port is open (service returns "1" for open)
   if echo "${output}" | grep -q "1"; then
-    [ "${GSP_MINIMAL_LOGS,,}" = 'false' ] && log "[GSP-PORT-CHECK] Port ${port} is open (verified with ${tool_used})."
+    [ "${GSP_MINIMAL_LOGS,,}" = 'false' ] && log "Port ${port} is open (verified with ${tool_used})."
     return 0
   else
-    log "[GSP-PORT-CHECK] WARNING: Port ${port} appears to be closed or unreachable."
+    log "WARNING: Port ${port} appears to be closed or unreachable."
     return 1
   fi
 }
