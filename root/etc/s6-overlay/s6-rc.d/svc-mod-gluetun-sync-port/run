@@ -9,6 +9,12 @@ INIT_RETRY_WAIT="${GSP_INIT_RETRY_WAIT:-10}"
 CERT_CHECK="${GSP_CERT_CHECK:-true}"
 CURL_OPT='-L'
 [ "${CERT_CHECK,,}" = 'false' ] && CURL_OPT="${CURL_OPT} --insecure"
+# Portcheck IP family: 4=IPv4, 6=IPv6, auto=curl default. Default 4 for Gluetun+Proton (IPv4 forwarding).
+case "${GSP_PORTCHECK_IP_FAMILY:-4}" in
+  4)  CURL_IP_FLAG="-4" ;;
+  6)  CURL_IP_FLAG="-6" ;;
+  *)  CURL_IP_FLAG=""   ;;
+esac
 DEBUG="${GSP_DEBUG:-false}"
 
 GTN_PORT_INDEX="$(( ${GSP_GTN_PORT_INDEX:-1} - 1))"
@@ -80,6 +86,7 @@ $(env | grep 'GSP')
 | STANDALONE_MODE = $([ -f ${CONF_FILE} ] && echo 'false' || echo 'true')
 +---------------------------------------------------------+
 "
+  log "Using ${CURL_IP_FLAG:-auto} for portcheck."
   set -x
 fi
 
@@ -108,7 +115,7 @@ check_port_open(){
 
   # Detect available tool (curl first, wget as fallback)
   if command -v curl >/dev/null 2>&1; then
-    output=$(curl -s ${CURL_OPT} "${check_url}" 2>/dev/null)
+    output=$(curl ${CURL_IP_FLAG} -s ${CURL_OPT} "${check_url}" 2>/dev/null)
     tool_used="curl"
   elif command -v wget >/dev/null 2>&1; then
     output=$(wget -qO- "${check_url}" 2>/dev/null)

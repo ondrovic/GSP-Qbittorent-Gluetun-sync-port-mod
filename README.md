@@ -157,6 +157,7 @@ The following env variables can be used to configure the mod (Only `GSP_GTN_API_
 | `GSP_CERT_CHECK`       |         `true`          | Set to `false` to disable certificate check. (curl's insecure flag)                                      |
 | `GSP_MINIMAL_LOGS`     |         `true`          | Set to `false` to enable "Ports did not change." logs.                                                   |
 | `GSP_INIT_RETRY_WAIT`  |      `10` (=60s)        | Number of retries to connect to qbittorrent's webUI at startup. Each retry takes 6 seconds. Increase to allow a longer wait at startup.          |
+| `GSP_PORTCHECK_IP_FAMILY` |       `4`            | IP family for external port-check: `4` (IPv4), `6` (IPv6), `auto` (curl default). Default `4` avoids false 'port closed' in dual-stack when VPN forwarding is IPv4 (e.g. Gluetun+Proton). |
 | `GSP_DEBUG`            |         `false`         | Set to `true` to enable mod's `set -x`.<br>:warning: **FOR DEBUG ONLY.**<br>This will show your credentials in the logs.                |
 
 I was planning on implementing the option to use Gluetun's port forwarding file but since it will be [deprecated in v4](https://github.com/qdm12/gluetun-wiki/blob/main/setup/advanced/vpn-port-forwarding.md#native-integrations), I won't.
@@ -337,6 +338,14 @@ or something like this if you have multiple ports (you can use `GSP_GTN_PORT_IND
 If you get `0` or an error, then the issue is from your gluetun's configuration, you can get help [on the wiki](https://github.com/qdm12/gluetun-wiki/blob/main/setup/advanced/vpn-port-forwarding.md) or [open an issue](https://github.com/qdm12/gluetun/issues).
 
 **Note :** even with `openvpn` in the URL, this is also valid for Wireguard.
+
+</details>
+
+<details>
+
+  <summary>Port appears closed or unreachable.</summary>
+
+If you see `WARNING: Port … appears to be closed or unreachable` but the port is actually open, you may be in a dual-stack (IPv4/IPv6) or Kubernetes environment where the external port-check uses the wrong family. The VPN often only forwards IPv4 (e.g. Gluetun+Proton). Setting `GSP_PORTCHECK_IP_FAMILY=4` forces the port-check to use IPv4; this is the default as of the latest mod version, so upgrading should fix false negatives. If you are on an older image, set the variable explicitly.
 
 </details>
 
